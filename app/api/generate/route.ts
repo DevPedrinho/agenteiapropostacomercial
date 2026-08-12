@@ -8,17 +8,8 @@ function isValidInput(body: unknown): body is ProductSpecInput {
   if (!body || typeof body !== "object") return false;
   const b = body as Record<string, unknown>;
   if (typeof b.productName !== "string" || !b.productName.trim()) return false;
-  if (!Array.isArray(b.specs)) return false;
-  const validSpecs = b.specs.some(
-    (s) =>
-      s &&
-      typeof s === "object" &&
-      typeof (s as Record<string, unknown>).label === "string" &&
-      typeof (s as Record<string, unknown>).value === "string" &&
-      (s as Record<string, string>).label.trim() &&
-      (s as Record<string, string>).value.trim()
-  );
-  return validSpecs;
+  if (typeof b.rawSpecs !== "string" || !b.rawSpecs.trim()) return false;
+  return true;
 }
 
 export async function POST(request: Request) {
@@ -31,7 +22,7 @@ export async function POST(request: Request) {
 
   if (!isValidInput(body)) {
     return NextResponse.json(
-      { error: "Informe o nome do produto e ao menos um spec preenchido (label e valor)." },
+      { error: "Informe o nome do produto e cole a lista de peças." },
       { status: 400 }
     );
   }

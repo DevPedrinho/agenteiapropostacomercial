@@ -22,6 +22,25 @@ Produtividade estável para equipes que trabalham o dia inteiro.
 ...
 ```
 
+## Entrada: cole a lista de peças, não preencha spec por spec
+
+O vendedor cola a lista de peças exatamente como veio do fornecedor/nota — nome
+completo, marca, modelo e código de SKU tudo misturado, uma peça por linha:
+
+```
+Ssd Kingston 480GB Sata III A400 SA400S37/480G Preto
+PLACA MAE B860M EAGLE WIFI6 V2 1.0 GIGABYTE, DDR5, LGA 1851, PMI-B860MEAGLEGIGA
+32gb ddr5
+SSD 1TB KINGSTON SNV3S/1000G, M.2 2280, PCIE 4.0, NV-1TBKGS
+FONTE C3TECH PS-G1000 1000W, 80 PLUS GOLD, FTE-1000WC3T
+```
+
+A IA identifica a categoria de cada linha, limpa o texto (remove código de SKU do
+fornecedor, que não interessa ao cliente final) e separa peças duplicadas da mesma
+categoria (ex: dois SSDs viram "Armazenamento (Sistema)" e "Armazenamento (Dados)").
+Todo esse parsing acontece na mesma chamada que gera o conteúdo de venda — o
+vendedor só cola o texto e clica em "Gerar proposta".
+
 O conteúdo é gerado **uma vez** pela API da Anthropic, como um objeto estruturado
 (`ProposalContent` em `lib/types.ts`): posicionamento, visão rápida, ficha completa,
 argumento de venda e aplicação prática. Cada estilo de saída é uma função pura que
@@ -48,8 +67,8 @@ cp .env.example .env.local   # preencha ANTHROPIC_API_KEY
 npm run dev
 ```
 
-Abra http://localhost:3000, preencha o nome do produto e os specs, e clique em
-"Gerar proposta".
+Abra http://localhost:3000, preencha o nome do produto, cole a lista de peças, e
+clique em "Gerar proposta".
 
 ### Variáveis de ambiente
 

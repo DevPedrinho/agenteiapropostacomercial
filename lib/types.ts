@@ -6,7 +6,8 @@ export type SpecItem = {
 /** What the user fills in the form. */
 export type ProductSpecInput = {
   productName: string;
-  specs: SpecItem[];
+  /** Lista de peças colada como veio do fornecedor/nota, uma por linha. */
+  rawSpecs: string;
   audience: string;
   notes: string;
 };

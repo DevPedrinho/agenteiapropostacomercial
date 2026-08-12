@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProductSpecInput, SpecItem } from "@/lib/types";
+import type { ProductSpecInput } from "@/lib/types";
 
 type Props = {
   value: ProductSpecInput;
@@ -9,15 +9,17 @@ type Props = {
   loading: boolean;
 };
 
-function updateSpec(specs: SpecItem[], index: number, patch: Partial<SpecItem>): SpecItem[] {
-  return specs.map((s, i) => (i === index ? { ...s, ...patch } : s));
-}
+const RAW_SPECS_PLACEHOLDER = `Cole aqui a lista de peças, uma por linha, do jeito que veio da nota/fornecedor:
+
+Ssd Kingston 480GB Sata III A400 SA400S37/480G Preto
+PLACA MAE B860M EAGLE WIFI6 V2 1.0 GIGABYTE, DDR5, LGA 1851, PMI-B860MEAGLEGIGA
+32gb ddr5
+SSD 1TB KINGSTON SNV3S/1000G, M.2 2280, PCIE 4.0...
+FONTE C3TECH PS-G1000 1000W, 80 PLUS GOLD...`;
 
 export default function SpecEditor({ value, onChange, onSubmit, loading }: Props) {
   const canSubmit =
-    value.productName.trim().length > 0 &&
-    value.specs.some((s) => s.label.trim() && s.value.trim()) &&
-    !loading;
+    value.productName.trim().length > 0 && value.rawSpecs.trim().length > 0 && !loading;
 
   return (
     <section className="panel">
@@ -34,38 +36,18 @@ export default function SpecEditor({ value, onChange, onSubmit, loading }: Props
       </div>
 
       <div className="field">
-        <label>Specs</label>
-        {value.specs.map((spec, i) => (
-          <div className="spec-row" key={i}>
-            <input
-              value={spec.label}
-              onChange={(e) => onChange({ ...value, specs: updateSpec(value.specs, i, { label: e.target.value }) })}
-              placeholder="Ex: Processador"
-            />
-            <input
-              value={spec.value}
-              onChange={(e) => onChange({ ...value, specs: updateSpec(value.specs, i, { value: e.target.value }) })}
-              placeholder="Ex: Core i5-14400F"
-            />
-            <button
-              type="button"
-              className="btn-remove"
-              aria-label="Remover spec"
-              onClick={() =>
-                onChange({ ...value, specs: value.specs.filter((_, idx) => idx !== i) })
-              }
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => onChange({ ...value, specs: [...value.specs, { label: "", value: "" }] })}
-        >
-          + Adicionar spec
-        </button>
+        <label htmlFor="rawSpecs">Lista de peças</label>
+        <textarea
+          id="rawSpecs"
+          rows={12}
+          value={value.rawSpecs}
+          onChange={(e) => onChange({ ...value, rawSpecs: e.target.value })}
+          placeholder={RAW_SPECS_PLACEHOLDER}
+        />
+        <p className="field-hint">
+          Pode colar direto da nota ou do orçamento do fornecedor — nome completo, marca, modelo e
+          código de SKU misturados. A IA identifica cada peça e limpa o texto sozinha.
+        </p>
       </div>
 
       <div className="field">

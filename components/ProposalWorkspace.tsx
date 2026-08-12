@@ -7,12 +7,7 @@ import type { ProductSpecInput, ProposalContent, ProposalStyle } from "@/lib/typ
 
 const DEFAULT_INPUT: ProductSpecInput = {
   productName: "",
-  specs: [
-    { label: "Processador", value: "" },
-    { label: "Memória", value: "" },
-    { label: "Armazenamento", value: "" },
-    { label: "Fonte", value: "" },
-  ],
+  rawSpecs: "",
   audience: "",
   notes: "",
 };
