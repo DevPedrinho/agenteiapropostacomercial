@@ -27,7 +27,7 @@ export type ProposalContent = {
   indicatedFor: string[];
 };
 
-export type ProposalStyle = "comercial" | "executivo" | "compacto";
+export type ProposalStyle = "comercial" | "executivo" | "compacto" | "b2b";
 
 export const PROPOSAL_STYLES: { id: ProposalStyle; label: string; hint: string }[] = [
   {
@@ -44,5 +44,10 @@ export const PROPOSAL_STYLES: { id: ProposalStyle; label: string; hint: string }
     id: "compacto",
     label: "Compacto",
     hint: "Versão curta para WhatsApp: só o essencial para decidir rápido.",
+  },
+  {
+    id: "b2b",
+    label: "B2B",
+    hint: "Ficha técnica completa em formato de tabela (Item / Especificação), com Aplicações Recomendadas e Destaques — para propostas corporativas, RFPs e apresentação a TI.",
   },
 ];

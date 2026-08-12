@@ -99,10 +99,36 @@ function renderCompacto(c: ProposalContent): string {
   ].join("\n");
 }
 
+/**
+ * B2B: ficha técnica em formato de tabela (cola direto numa planilha ou
+ * documento), com "Aplicações Recomendadas" e "Destaques da Configuração"
+ * separados — para propostas corporativas, RFP e apresentação a TI.
+ */
+function renderB2B(c: ProposalContent): string {
+  const table = c.fullSpecs.map((s) => `${s.label}\t${s.value}`).join("\n");
+  const apps = c.indicatedFor.map((line) => `✔ ${line}`).join("\n");
+  const highlights = c.quickView.map((s) => `✅ ${s.label} — ${s.value}`).join("\n");
+
+  return [
+    `SKU ${c.productName} ${c.skuLine}`,
+    "Item\tEspecificação",
+    table,
+    "",
+    "Aplicações Recomendadas",
+    "",
+    apps,
+    "",
+    "Destaques da Configuração",
+    "",
+    highlights,
+  ].join("\n");
+}
+
 const RENDERERS: Record<ProposalStyle, (c: ProposalContent) => string> = {
   comercial: renderComercial,
   executivo: renderExecutivo,
   compacto: renderCompacto,
+  b2b: renderB2B,
 };
 
 /** Re-renders the same structured content in a different style — no generation call needed. */
