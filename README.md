@@ -61,7 +61,9 @@ não faz uma nova chamada de geração.
   produto da Dell/Lenovo. Fecha com "Aplicações Recomendadas" e "Destaques da Configuração".
   Para propostas corporativas, RFP e apresentação a TI.
 
-O painel de saída é editável: o texto pode ser ajustado à mão antes de copiar.
+O painel de saída mostra um cartão visual (não texto puro) com a ficha organizada. O botão
+"Copiar" copia a versão em texto do estilo selecionado — pronta para colar no Bling, WhatsApp
+ou e-mail, sem precisar editar nada na tela.
 
 ## Rodando localmente
 

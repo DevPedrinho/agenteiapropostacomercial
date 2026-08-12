@@ -203,29 +203,6 @@ button {
   margin: 0 0 14px;
 }
 
-.copy-text-label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin: 0 0 8px;
-}
-
-.output-textarea {
-  width: 100%;
-  min-height: 320px;
-  background: #0d0f14;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 16px;
-  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 0.86rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  resize: vertical;
-}
-
 .output-actions {
   display: flex;
   gap: 10px;
