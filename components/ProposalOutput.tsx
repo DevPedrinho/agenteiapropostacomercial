@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ProposalPreview from "./ProposalPreview";
 import { renderProposal } from "@/lib/render-styles";
 import { PROPOSAL_STYLES } from "@/lib/types";
 import type { ProposalContent, ProposalStyle } from "@/lib/types";
@@ -61,6 +62,9 @@ export default function ProposalOutput({ content, style, onStyleChange }: Props)
 
       {content ? (
         <>
+          <ProposalPreview content={content} style={style} />
+
+          <p className="copy-text-label">Texto para copiar</p>
           <textarea
             className="output-textarea"
             value={text}

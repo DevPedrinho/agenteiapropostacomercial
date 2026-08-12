@@ -12,16 +12,18 @@ Regras para interpretar a lista de peças (isso vira "quickView" e "fullSpecs"):
 - Escreva o "value" de forma limpa e comercial: marca + modelo + as specs que interessam ao cliente (capacidade, velocidade, wattagem, certificação, tamanho). REMOVA códigos internos de SKU / part number / referência do fornecedor (ex: "SA400S37/480G", "PMI-B860MEAGLEGIGA", "FTE-1000WC3T") — eles não devem aparecer no texto final, o cliente não usa isso pra decidir.
 - Se houver mais de uma peça da mesma categoria (ex: dois SSDs, um de sistema e um de dados), NÃO junte numa linha só: crie duas entradas separadas, diferenciando pela função ou pela característica mais marcante (ex: "Armazenamento (Sistema)" e "Armazenamento (Dados)").
 - Ignore linhas em branco. Nunca invente uma peça que não estava na lista.
-- "fullSpecs" tem uma entrada para cada peça identificada, nessa ordem: Processador, Sistema Operacional (se souber ou puder inferir compatibilidade, ex: "Compatível com Windows 11 Pro/Home e Linux"), Placa-mãe, Placa de vídeo, Memória, Armazenamento(s), Fonte, Gabinete, Refrigeração, e o que mais aparecer. Em vez de um parágrafo, "facts" é uma LISTA de 1 a 3 fatos curtos e independentes sobre essa peça — cada fato é uma linha só, sem ponto final, no formato enxuto de bullet de página de produto da Dell/Lenovo (ex: para Processador: ["Intel Core i5-14400F, 10 núcleos e 16 threads", "Turbo de até 4.7GHz, 20MB de cache"]; para Sistema Operacional: ["Windows 11 Pro — recomendado para uso corporativo", "Compatível também com Windows 11 Home e Linux"]). O primeiro fato deve ser o mais decisivo (marca + modelo + spec principal); os demais complementam. Nunca escreva um único fato longo tentando caber tudo — quebre em fatos separados.
-- "quickView" tem no máximo 5 itens: os mais decisivos pra quem está comparando propostas (processador, memória, armazenamento principal, placa de vídeo se houver, fonte), com o value BEM resumido (uma linha curta, tipo "Core i5-14400F, 10 núcleos / 16 threads") — o oposto do "fullSpecs", que é longo.
+- "fullSpecs" tem uma entrada para cada peça identificada, nessa ordem: Processador, Sistema Operacional (se souber ou puder inferir compatibilidade, ex: "Compatível com Windows 11 Pro/Home e Linux"), Placa-mãe, Placa de vídeo, Memória, Armazenamento(s), Fonte, Gabinete, Refrigeração, e o que mais aparecer. "facts" é uma LISTA de NO MÁXIMO 2 fatos curtos e independentes sobre essa peça — cada fato é uma frase enxuta de até 10 palavras, sem ponto final, no formato de bullet de página de produto da Dell/Lenovo (ex: para Processador: ["Intel Core i5-14400F, 10 núcleos e 16 threads", "Turbo de até 4.7GHz"]). O primeiro fato é sempre o mais decisivo (marca + modelo + spec principal); o segundo (se houver) complementa com UM dado extra, nunca uma explicação longa. Prefira 1 fato a 2 quando o segundo não agregar nada novo.
+- "quickView" tem no máximo 5 itens: os mais decisivos pra quem está comparando propostas (processador, memória, armazenamento principal, placa de vídeo se houver, fonte), com o value BEM resumido (até 8 palavras, tipo "Core i5-14400F, 10 núcleos / 16 threads").
 - "skuLine" é a linha compacta desses itens principais, separados por " | ", em caixa alta, no formato "CORE I5-14400F | 16GB DDR4 | SSD NVMe 1TB | 500W". Use no máximo 4-5 itens.
 
 Regras para o texto de venda:
-- "positioning" é UMA frase curta (sem specs, sem números) dizendo para quem a máquina serve e que problema ela resolve. É o texto que fica embaixo do SKU.
-- "whyThisConfig" é argumento de venda: por que essa combinação de peças faz sentido, o que ela entrega na prática (3 a 5 bullets curtos, sem repetir o que já foi dito na ficha técnica).
-- "indicatedFor" é aplicação prática: para que tipo de cliente, cargo ou uso essa máquina é indicada (3 a 5 bullets curtos). NÃO misture com "whyThisConfig": um é argumento, o outro é público/aplicação.
+- "positioning" é UMA frase curta (até 16 palavras, sem specs, sem números) dizendo para quem a máquina serve e que problema ela resolve. É o texto que fica embaixo do SKU.
+- "whyThisConfig" é argumento de venda: por que essa combinação de peças faz sentido, o que ela entrega na prática. 3 bullets, cada um com até 12 palavras, sem repetir o que já foi dito na ficha técnica.
+- "indicatedFor" é aplicação prática: para que tipo de cliente, cargo ou uso essa máquina é indicada. 3 bullets, cada um com até 8 palavras (nomeie o público/uso, não explique por quê). NÃO misture com "whyThisConfig": um é argumento, o outro é público/aplicação.
 - Nunca use emoji dentro dos textos (a formatação de emoji é aplicada depois, por estilo).
-- Tom: direto, sem adjetivos vazios ("incrível", "revolucionário"). Escreva como quem entende de hardware.`;
+- Tom: direto, sem adjetivos vazios ("incrível", "revolucionário"). Escreva como quem entende de hardware.
+
+Regra final, a mais importante: DEPOIS de escrever tudo, releia cada campo e corte qualquer palavra que não mude o sentido. O maior erro possível aqui é entregar um texto longo — uma ficha poluída de texto é pior que uma ficha curta e direta. Quando em dúvida entre uma frase mais completa e uma mais curta, escolha a mais curta.`;
 
 const TOOL_NAME = "emit_proposal_content";
 
@@ -55,7 +57,7 @@ const TOOL_SCHEMA = {
               type: "array" as const,
               items: { type: "string" as const },
               minItems: 1,
-              maxItems: 3,
+              maxItems: 2,
             },
           },
           required: ["label", "facts"],
@@ -64,10 +66,12 @@ const TOOL_SCHEMA = {
       whyThisConfig: {
         type: "array" as const,
         items: { type: "string" as const },
+        maxItems: 3,
       },
       indicatedFor: {
         type: "array" as const,
         items: { type: "string" as const },
+        maxItems: 3,
       },
     },
     required: [
