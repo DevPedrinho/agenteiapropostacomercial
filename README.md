@@ -56,9 +56,10 @@ não faz uma nova chamada de geração.
   marcadores `✔ ▪ •` são caracteres de texto comum, não emoji — passam em
   qualquer lugar.
 - **Compacto** — versão curta para WhatsApp, com `*negrito*` no lugar das réguas.
-- **B2B** — ficha técnica em formato de tabela (`Item` + `Especificação`, separados por tab —
-  cola direto numa planilha ou documento), com "Aplicações Recomendadas" e "Destaques da
-  Configuração" separados. Para propostas corporativas, RFP e apresentação a TI.
+- **B2B** — ficha técnica agrupada por seção (Performance, Memória e Armazenamento, Estrutura e
+  Energia), cada categoria com seus fatos como bullets `•` — o mesmo padrão das páginas de
+  produto da Dell/Lenovo. Fecha com "Aplicações Recomendadas" e "Destaques da Configuração".
+  Para propostas corporativas, RFP e apresentação a TI.
 
 O painel de saída é editável: o texto pode ser ajustado à mão antes de copiar.
 

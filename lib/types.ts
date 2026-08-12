@@ -3,6 +3,12 @@ export type SpecItem = {
   value: string;
 };
 
+/** Uma categoria da ficha técnica completa, com os fatos como bullets separados (ex: Lenovo/Dell). */
+export type FullSpecItem = {
+  label: string;
+  facts: string[];
+};
+
 /** What the user fills in the form. */
 export type ProductSpecInput = {
   productName: string;
@@ -22,7 +28,7 @@ export type ProposalContent = {
   skuLine: string;
   positioning: string;
   quickView: SpecItem[];
-  fullSpecs: SpecItem[];
+  fullSpecs: FullSpecItem[];
   whyThisConfig: string[];
   indicatedFor: string[];
 };
@@ -48,6 +54,6 @@ export const PROPOSAL_STYLES: { id: ProposalStyle; label: string; hint: string }
   {
     id: "b2b",
     label: "B2B",
-    hint: "Ficha técnica completa em formato de tabela (Item / Especificação), com Aplicações Recomendadas e Destaques — para propostas corporativas, RFPs e apresentação a TI.",
+    hint: "Ficha técnica agrupada por categoria com bullets, no padrão que Dell e Lenovo usam nas páginas de produto — para propostas corporativas, RFPs e apresentação a TI.",
   },
 ];

@@ -1,11 +1,18 @@
 import { getSpecIcon, SECTION_ICONS } from "./icons";
-import type { ProposalContent, ProposalStyle, SpecItem } from "./types";
+import { groupFullSpecs } from "./spec-groups";
+import type { FullSpecItem, ProposalContent, ProposalStyle, SpecItem } from "./types";
 
 const RULE = "━".repeat(36);
 
 function specLine(spec: SpecItem, icon: string | null): string {
   const prefix = icon ? `${icon} ` : "";
   return `${prefix}${spec.label} — ${spec.value}`;
+}
+
+/** Uma categoria da ficha completa (label + fatos) numa linha só, para os estilos de texto corrido. */
+function fullSpecLine(spec: FullSpecItem, icon: string | null): string {
+  const prefix = icon ? `${icon} ` : "";
+  return `${prefix}${spec.label} — ${spec.facts.join("; ")}`;
 }
 
 function section(title: string, icon: string | null, body: string): string {
@@ -22,7 +29,7 @@ function renderComercial(c: ProposalContent): string {
     .map((s) => specLine(s, getSpecIcon(s.label)))
     .join("\n");
   const fullSpecs = c.fullSpecs
-    .map((s) => specLine(s, getSpecIcon(s.label)))
+    .map((s) => fullSpecLine(s, getSpecIcon(s.label)))
     .join("\n");
   const why = c.whyThisConfig.map((line) => `✔ ${line}`).join("\n");
   const indicated = c.indicatedFor.map((line) => `▪ ${line}`).join("\n");
@@ -51,7 +58,7 @@ function renderComercial(c: ProposalContent): string {
  */
 function renderExecutivo(c: ProposalContent): string {
   const quickView = c.quickView.map((s) => specLine(s, null)).join("\n");
-  const fullSpecs = c.fullSpecs.map((s) => specLine(s, null)).join("\n");
+  const fullSpecs = c.fullSpecs.map((s) => fullSpecLine(s, null)).join("\n");
   const why = c.whyThisConfig.map((line) => `✔ ${line}`).join("\n");
   const indicated = c.indicatedFor.map((line) => `▪ ${line}`).join("\n");
 
@@ -100,19 +107,31 @@ function renderCompacto(c: ProposalContent): string {
 }
 
 /**
- * B2B: ficha técnica em formato de tabela (cola direto numa planilha ou
- * documento), com "Aplicações Recomendadas" e "Destaques da Configuração"
- * separados — para propostas corporativas, RFP e apresentação a TI.
+ * B2B: ficha técnica agrupada por seção (Performance, Memória e
+ * Armazenamento, Estrutura e Energia), cada categoria com seus fatos como
+ * bullets — o mesmo padrão das páginas de produto da Dell/Lenovo. Fecha
+ * com "Aplicações Recomendadas" e "Destaques da Configuração".
  */
 function renderB2B(c: ProposalContent): string {
-  const table = c.fullSpecs.map((s) => `${s.label}\t${s.value}`).join("\n");
+  const groups = groupFullSpecs(c.fullSpecs);
+  const specSheet = groups
+    .map(({ group, items }) => {
+      const itemsText = items
+        .map((item) => [item.label, ...item.facts.map((f) => `• ${f}`)].join("\n"))
+        .join("\n\n");
+      return `${group}\n\n${itemsText}`;
+    })
+    .join("\n\n");
+
   const apps = c.indicatedFor.map((line) => `✔ ${line}`).join("\n");
   const highlights = c.quickView.map((s) => `✅ ${s.label} — ${s.value}`).join("\n");
 
   return [
-    `SKU ${c.productName} ${c.skuLine}`,
-    "Item\tEspecificação",
-    table,
+    "Especificações Técnicas",
+    "",
+    `${c.productName} — ${c.skuLine}`,
+    "",
+    specSheet,
     "",
     "Aplicações Recomendadas",
     "",
