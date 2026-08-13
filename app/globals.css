@@ -203,6 +203,19 @@ button {
   margin: 0 0 14px;
 }
 
+.copy-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 10px 0 0;
+}
+
+.copy-hint code {
+  background: var(--panel-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
 .output-actions {
   display: flex;
   gap: 10px;

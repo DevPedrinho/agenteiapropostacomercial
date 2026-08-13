@@ -13,18 +13,26 @@ type Props = {
   onStyleChange: (style: ProposalStyle) => void;
 };
 
+type CopiedKind = "rich" | "source" | null;
+
 export default function ProposalOutput({ content, style, onStyleChange }: Props) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<CopiedKind>(null);
 
   const activeHint = PROPOSAL_STYLES.find((s) => s.id === style)?.hint;
+
+  function flashCopied(kind: CopiedKind) {
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
+  }
 
   async function handleCopy() {
     if (!content) return;
     const text = renderProposal(content, style);
 
     // Manda texto puro e HTML juntos: um editor simples (WhatsApp, campo de
-    // texto) pega o texto; um editor rico (ex: o campo de itens do Bling)
-    // reconhece o HTML e cola já com negrito e listas, em vez de texto corrido.
+    // texto) pega o texto; um editor rico que aceita colar HTML direto pega
+    // o outro formato. Nem todo editor faz essa escolha sozinho — por isso
+    // também existe o botão "Copiar código-fonte" abaixo.
     try {
       const html = renderProposalHtml(content, style);
       await navigator.clipboard.write([
@@ -37,8 +45,13 @@ export default function ProposalOutput({ content, style, onStyleChange }: Props)
       await navigator.clipboard.writeText(text);
     }
 
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    flashCopied("rich");
+  }
+
+  async function handleCopySource() {
+    if (!content) return;
+    await navigator.clipboard.writeText(renderProposalHtml(content, style));
+    flashCopied("source");
   }
 
   return (
@@ -67,8 +80,16 @@ export default function ProposalOutput({ content, style, onStyleChange }: Props)
             <button className="btn" type="button" onClick={handleCopy}>
               Copiar
             </button>
-            {copied && <span className="copy-feedback">Copiado!</span>}
+            <button className="btn-secondary" type="button" onClick={handleCopySource}>
+              Copiar código-fonte
+            </button>
+            {copied === "rich" && <span className="copy-feedback">Copiado!</span>}
+            {copied === "source" && <span className="copy-feedback">Código copiado!</span>}
           </div>
+          <p className="copy-hint">
+            &quot;Copiar código-fonte&quot; é para colar no botão <code>&lt;&gt;</code> (código-fonte)
+            do editor do Bling — cola formatado sem depender do Ctrl+V normal.
+          </p>
         </>
       ) : (
         <div className="empty-state">
