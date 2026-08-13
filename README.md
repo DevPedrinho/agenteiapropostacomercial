@@ -62,8 +62,10 @@ não faz uma nova chamada de geração.
   Para propostas corporativas, RFP e apresentação a TI.
 
 O painel de saída mostra um cartão visual (não texto puro) com a ficha organizada. O botão
-"Copiar" copia a versão em texto do estilo selecionado — pronta para colar no Bling, WhatsApp
-ou e-mail, sem precisar editar nada na tela.
+"Copiar" manda dois formatos pra área de transferência ao mesmo tempo — texto puro e HTML
+(`lib/render-html.ts`) — então o Ctrl+V se adapta a onde você colar: num campo de texto rico
+(ex: "Outros itens" do Bling) sai com negrito e listas de verdade; num campo simples
+(WhatsApp, e-mail) sai o texto puro de sempre.
 
 ## Rodando localmente
 

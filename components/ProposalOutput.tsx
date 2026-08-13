@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ProposalPreview from "./ProposalPreview";
+import { renderProposalHtml } from "@/lib/render-html";
 import { renderProposal } from "@/lib/render-styles";
 import { PROPOSAL_STYLES } from "@/lib/types";
 import type { ProposalContent, ProposalStyle } from "@/lib/types";
@@ -19,7 +20,23 @@ export default function ProposalOutput({ content, style, onStyleChange }: Props)
 
   async function handleCopy() {
     if (!content) return;
-    await navigator.clipboard.writeText(renderProposal(content, style));
+    const text = renderProposal(content, style);
+
+    // Manda texto puro e HTML juntos: um editor simples (WhatsApp, campo de
+    // texto) pega o texto; um editor rico (ex: o campo de itens do Bling)
+    // reconhece o HTML e cola já com negrito e listas, em vez de texto corrido.
+    try {
+      const html = renderProposalHtml(content, style);
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([text], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        }),
+      ]);
+    } catch {
+      await navigator.clipboard.writeText(text);
+    }
+
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
