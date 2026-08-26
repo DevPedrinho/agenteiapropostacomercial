@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { CartProvider } from "@/lib/cart-context";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Agente de Proposta Comercial",
+  title: "GeekBox — Loja Geek",
   description:
-    "Gera fichas de produto no padrão Dell/Lenovo, com posicionamento, visão rápida e três estilos de saída.",
+    "Colecionáveis, camisetas, jogos de tabuleiro, acessórios gamer e muito mais para o seu lado nerd.",
 };
 
 export default function RootLayout({
@@ -14,7 +17,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <CartProvider>
+          <Header />
+          <main>{children}</main>
+          <Footer />
+        </CartProvider>
+      </body>
     </html>
   );
 }
