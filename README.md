@@ -163,6 +163,28 @@ clique em "Gerar proposta".
   Sem ela, deriva do client secret. Trocar invalida todas as sessões conectadas.
 - `BLING_API_BASE_URL` (opcional) — URL base da API, padrão `https://www.bling.com.br/Api/v3`.
 
+## Deploy (Vercel)
+
+O repositório está ligado ao projeto `agenteiapropostacomercial` na Vercel. Push na
+`main` vira produção; push em qualquer outra branch gera um preview.
+
+- Produção: <https://agenteiapropostacomercial-pedros-projects-8bfe3549.vercel.app>
+
+Variáveis de ambiente para definir em *Settings > Environment Variables* (Production
+e Preview): `ANTHROPIC_API_KEY`, `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET` e,
+opcionalmente, `BLING_TOKEN_SECRET`. O build não precisa de nenhuma delas; sem
+`ANTHROPIC_API_KEY` a ficha de produto retorna erro ao gerar, e sem as do Bling o
+montador funciona só no modo manual.
+
+URL de redirecionamento a cadastrar no aplicativo do Bling (produção):
+
+```
+https://agenteiapropostacomercial-pedros-projects-8bfe3549.vercel.app/api/bling/callback
+```
+
+Previews têm domínio próprio a cada branch; para testar o Bling num preview, cadastre
+também a URL daquele preview (o Bling aceita mais de uma) ou use o domínio de produção.
+
 ## Scripts
 
 - `npm run dev` — servidor de desenvolvimento
