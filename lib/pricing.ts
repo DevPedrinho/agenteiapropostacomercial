@@ -1,38 +1,37 @@
-import type { PricingRates, Quote, QuoteItem } from "./quote-types";
+import type { PricingRates, QuoteItem } from "./quote-types";
 
 /**
- * Motor de precificação. Reproduz a conta da planilha dos vendedores:
+ * Motor de precificação — a mesma conta da planilha dos vendedores:
  *
- *   custo com entrada = custo × (1 + entrada%)
- *   base              = custo com entrada × (1 + markup%)
- *   preço de venda    = base ÷ (1 − saída% − CET%)
+ *   CET (custo efetivo total) = custo × (1 + imposto de entrada%)
+ *   base                       = CET × (1 + markup%)          ← "MARKUP" na planilha
+ *   preço de venda             = base ÷ (1 − imposto de saída%)
  *
- * Imposto de saída e CET incidem sobre o preço final, então entram como
- * divisor ("gross-up"): o que sobra depois de pagar os dois é exatamente a
- * base, e o lucro líquido é o markup sobre o custo com entrada.
+ * O imposto de saída incide sobre o preço final, então entra como divisor
+ * ("gross-up"): o que sobra depois de pagá-lo é exatamente a base, e o lucro
+ * líquido é o markup sobre o CET. Com imposto de saída zero, preço = CET × markup,
+ * idêntico à planilha.
  */
 
-/** Menor divisor aceito: evita preço infinito se saída + CET ≥ 100%. */
+/** Menor divisor aceito: evita preço infinito se saída ≥ 100%. */
 const MIN_DIVISOR = 0.05;
 
 export type ItemPricing = {
   rates: PricingRates;
   qty: number;
   unitCost: number;
-  /** Custo unitário com imposto de entrada. */
-  unitLandedCost: number;
+  /** CET unitário: custo com imposto de entrada. */
+  unitCet: number;
   unitInboundTax: number;
   unitPrice: number;
   unitOutboundTax: number;
-  unitCet: number;
   unitProfit: number;
   /** Totais da linha (× quantidade). */
   cost: number;
-  landedCost: number;
+  cet: number;
   inboundTax: number;
   price: number;
   outboundTax: number;
-  cet: number;
   profit: number;
   /** Lucro líquido ÷ preço de venda. */
   marginPct: number;
@@ -43,13 +42,12 @@ export type QuoteTotals = {
   unitCount: number;
   cost: number;
   inboundTax: number;
-  landedCost: number;
-  outboundTax: number;
   cet: number;
+  outboundTax: number;
   profit: number;
   price: number;
   marginPct: number;
-  /** Markup efetivo do orçamento: lucro ÷ custo com entrada. */
+  /** Markup efetivo: lucro ÷ CET. */
   effectiveMarkupPct: number;
   /** Diferença entre o total e a meta (positivo = estourou). `null` sem meta. */
   diffToTarget: number | null;
@@ -59,7 +57,6 @@ export function resolveRates(item: QuoteItem, defaults: PricingRates): PricingRa
   return {
     inboundTaxPct: item.inboundTaxPct ?? defaults.inboundTaxPct,
     markupPct: item.markupPct ?? defaults.markupPct,
-    cetPct: item.cetPct ?? defaults.cetPct,
     outboundTaxPct: item.outboundTaxPct ?? defaults.outboundTaxPct,
   };
 }
@@ -69,13 +66,12 @@ function safe(n: number): number {
 }
 
 export function divisorFor(rates: PricingRates): number {
-  const d = 1 - (safe(rates.outboundTaxPct) + safe(rates.cetPct)) / 100;
-  return Math.max(d, MIN_DIVISOR);
+  return Math.max(1 - safe(rates.outboundTaxPct) / 100, MIN_DIVISOR);
 }
 
 export function unitPriceFor(unitCost: number, rates: PricingRates): number {
-  const landed = safe(unitCost) * (1 + safe(rates.inboundTaxPct) / 100);
-  const base = landed * (1 + safe(rates.markupPct) / 100);
+  const cet = safe(unitCost) * (1 + safe(rates.inboundTaxPct) / 100);
+  const base = cet * (1 + safe(rates.markupPct) / 100);
   return base / divisorFor(rates);
 }
 
@@ -84,41 +80,41 @@ export function priceItem(item: QuoteItem, defaults: PricingRates): ItemPricing 
   const qty = Math.max(0, safe(item.qty));
   const unitCost = Math.max(0, safe(item.cost));
   const unitInboundTax = unitCost * (safe(rates.inboundTaxPct) / 100);
-  const unitLandedCost = unitCost + unitInboundTax;
+  const unitCet = unitCost + unitInboundTax;
   const unitPrice = unitPriceFor(unitCost, rates);
   const unitOutboundTax = unitPrice * (safe(rates.outboundTaxPct) / 100);
-  const unitCet = unitPrice * (safe(rates.cetPct) / 100);
-  const unitProfit = unitPrice - unitOutboundTax - unitCet - unitLandedCost;
+  const unitProfit = unitPrice - unitOutboundTax - unitCet;
   const price = unitPrice * qty;
   return {
     rates,
     qty,
     unitCost,
-    unitLandedCost,
+    unitCet,
     unitInboundTax,
     unitPrice,
     unitOutboundTax,
-    unitCet,
     unitProfit,
     cost: unitCost * qty,
-    landedCost: unitLandedCost * qty,
+    cet: unitCet * qty,
     inboundTax: unitInboundTax * qty,
     price,
     outboundTax: unitOutboundTax * qty,
-    cet: unitCet * qty,
     profit: unitProfit * qty,
     marginPct: price > 0 ? (unitProfit * qty) / price : 0,
   };
 }
 
-export function totalQuote(quote: Pick<Quote, "items" | "defaults" | "targetBudget">): QuoteTotals {
-  const lines = quote.items.map((item) => priceItem(item, quote.defaults));
+export function totalItems(
+  items: QuoteItem[],
+  defaults: PricingRates,
+  targetBudget: number | null = null
+): QuoteTotals {
+  const lines = items.map((item) => priceItem(item, defaults));
   const sum = (pick: (l: ItemPricing) => number) => lines.reduce((acc, l) => acc + pick(l), 0);
   const cost = sum((l) => l.cost);
   const inboundTax = sum((l) => l.inboundTax);
-  const landedCost = sum((l) => l.landedCost);
-  const outboundTax = sum((l) => l.outboundTax);
   const cet = sum((l) => l.cet);
+  const outboundTax = sum((l) => l.outboundTax);
   const profit = sum((l) => l.profit);
   const price = sum((l) => l.price);
   return {
@@ -126,40 +122,36 @@ export function totalQuote(quote: Pick<Quote, "items" | "defaults" | "targetBudg
     unitCount: sum((l) => l.qty),
     cost,
     inboundTax,
-    landedCost,
-    outboundTax,
     cet,
+    outboundTax,
     profit,
     price,
     marginPct: price > 0 ? profit / price : 0,
-    effectiveMarkupPct: landedCost > 0 ? profit / landedCost : 0,
-    diffToTarget: quote.targetBudget != null ? price - quote.targetBudget : null,
+    effectiveMarkupPct: cet > 0 ? profit / cet : 0,
+    diffToTarget: targetBudget != null ? price - targetBudget : null,
   };
 }
 
 /**
- * Markup padrão (em %) que faz o orçamento fechar exatamente na meta.
+ * Markup padrão (em %) que faz a opção fechar exatamente na meta.
  *
  * Itens com markup próprio (override) ficam fixos; só os itens que usam o
  * padrão são recalculados. O preço é linear no markup, então:
  *
- *   total(m) = fixo + (1 + m) × S,  S = Σ qty × custo com entrada ÷ divisor
+ *   total(m) = fixo + (1 + m) × S,  S = Σ qty × CET ÷ divisor
  *   m = (meta − fixo) ÷ S − 1
  *
  * Retorna `null` quando não há item usando o padrão ou a meta é inválida.
  */
-export function markupToHitTarget(
-  quote: Pick<Quote, "items" | "defaults">,
-  target: number
-): number | null {
+export function markupToHitTarget(items: QuoteItem[], defaults: PricingRates, target: number): number | null {
   if (!Number.isFinite(target) || target <= 0) return null;
   let fixed = 0;
   let scale = 0;
-  for (const item of quote.items) {
-    const rates = resolveRates(item, quote.defaults);
+  for (const item of items) {
+    const rates = resolveRates(item, defaults);
     const qty = Math.max(0, safe(item.qty));
-    const landed = Math.max(0, safe(item.cost)) * (1 + safe(rates.inboundTaxPct) / 100);
-    const perUnit = (landed * qty) / divisorFor(rates);
+    const cet = Math.max(0, safe(item.cost)) * (1 + safe(rates.inboundTaxPct) / 100);
+    const perUnit = (cet * qty) / divisorFor(rates);
     if (item.markupPct != null) {
       fixed += perUnit * (1 + safe(item.markupPct) / 100);
     } else {
@@ -185,6 +177,11 @@ export function formatPct(value: number, digits = 1): string {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}%`;
+}
+
+/** Multiplicador como na planilha: 50% → "×1,50". */
+export function formatMultiplier(pct: number): string {
+  return `×${(1 + safe(pct) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Aceita "1.234,56", "1234.56", "R$ 1.234,56" e devolve o número. */

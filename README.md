@@ -9,68 +9,56 @@ Duas ferramentas para o time de vendas da Upar, no mesmo app:
 
 ## Montador de setup (`/orcamento`)
 
-### Fase 1 (esta): montagem manual a partir do estoque do Bling
+Substitui a planilha `MAQUINAS_IND_UPAR` (uma aba por cliente, 110 abas, várias cópias). A
+tela tem três colunas:
 
-A tela tem os slots de uma máquina — processador, placa-mãe, memória RAM,
-armazenamento, placa de vídeo, fonte, gabinete, refrigeração — e um grupo de extras
-(sistema operacional, monitor, periféricos, serviço/montagem, outros). Com o Bling
-conectado, o app carrega **o catálogo inteiro de produtos ativos** (`GET /produtos`,
-paginado, com cache de 5 minutos no servidor) e classifica cada produto num slot pelo
-nome (`lib/slots.ts`, com testes em `tests/slots.test.ts`). Ao clicar em **Escolher**
-num slot, a coluna da direita lista o que existe naquele slot **com estoque**, e o botão
-**Usar** coloca a peça no slot já com o preço de custo do Bling. Dá para **trocar** a
-peça, mudar a quantidade, adicionar mais de uma no mesmo slot (duas memórias, dois SSDs)
-e, quando o produto não está no Bling, usar **+ manual** e preencher nome e custo na
-planilha detalhada. O filtro de texto busca por palavras no catálogo inteiro (a
-classificação por nome pode errar em produtos com nome fora do padrão; o resultado mostra
-em qual slot o produto foi classificado).
+| Coluna | O que é |
+|---|---|
+| **Estoque Bling** (esquerda) | Catálogo de produtos ativos com saldo, classificado por peça. Clique num produto e ele entra no slot ativo, já com o preço de custo do Bling. Busca por palavras no catálogo inteiro; "buscar direto no Bling" quando não está no cache. |
+| **Montagem** (centro) | A máquina slot por slot (processador, placa-mãe, memória, armazenamento, placa de vídeo, fonte, gabinete, refrigeração, extras), com as **mesmas colunas da planilha**: fornecedor, custo, imposto de entrada, **CET**, markup (×) e venda. Peça sem estoque no Bling entra com "+ manual". |
+| **Resumo** (direita) | Venda total, custo, CET, lucro e margem; barra da meta do cliente com o markup que fecha nela; comparativo das opções; texto para o cliente, resumo interno, CSV e ficha de produto. |
+
+**Opções por cliente.** Um orçamento tem quantas opções de máquina forem necessárias (na
+planilha eram blocos empilhados na mesma aba). "+ Copiar esta" duplica a opção atual para
+trocar uma ou duas peças; o comparativo mostra venda, lucro e distância da meta de cada uma.
 
 ### Fase 2 (planejada): agente de IA
 
 O vendedor descreve a configuração desejada ("i5 de 14ª geração, 32 GB DDR5, RTX 4060,
 SSD 1 TB, até R$ 8.000") e um agente pesquisa o catálogo do Bling, verifica estoque e
-compatibilidade (soquete, DDR, potência da fonte) e propõe o setup pronto, que o
-vendedor revisa nesta mesma tela. A base para isso já existe: o catálogo classificado,
-o motor de preço e a ponte para a ficha de produto.
+compatibilidade (soquete, DDR, potência da fonte) e propõe a opção pronta, que o vendedor
+revisa nesta mesma tela. A base para isso já existe: o catálogo classificado, o motor de
+preço e a ponte para a ficha de produto.
 
-### Precificação
+### Precificação (a conta da planilha)
 
-Cada linha tem categoria, nome, link do produto no fornecedor, quantidade, custo e
-quatro percentuais — os mesmos da planilha:
+Cada linha tem fornecedor, produto, link, quantidade, custo e três percentuais, com um
+padrão por orçamento e sobrescrita por peça (campo em branco = padrão):
 
-| Percentual | Incide sobre | Exemplo |
+| Coluna | Na planilha | Aqui |
 |---|---|---|
-| Imposto de entrada | o custo de compra | DIFAL/ICMS na entrada |
-| Markup | o custo com imposto de entrada | margem desejada |
-| CET | o preço de venda | taxa do cartão, parcelamento, antecipação |
-| Imposto de saída | o preço de venda | Simples Nacional / ICMS na venda |
-
-O preço de venda é calculado com *gross-up* — saída e CET entram como divisor, porque
-incidem sobre o preço final e não sobre o custo:
+| Imposto de entrada | `Imposto` ×1,10 / ×1,0697 | 10 % / 6,97 % |
+| CET (custo efetivo total) | `UPAR CET` = custo × imposto | calculado: custo × (1 + imposto de entrada) |
+| Markup | `Markup` ×1,35 / ×1,5 | digite `1,35` ou `35`, aparece como ×1,35 |
+| Imposto de saída | não existia | sobre o preço de venda; a coluna só aparece quando é maior que zero |
 
 ```
-custo com entrada = custo × (1 + entrada%)
-base              = custo com entrada × (1 + markup%)
-preço de venda    = base ÷ (1 − saída% − CET%)
-lucro líquido     = preço − imposto de saída − CET − custo com entrada  (= markup sobre o custo com entrada)
+CET             = custo × (1 + imposto de entrada%)
+base            = CET × markup                       ← "MARKUP" da planilha
+preço de venda  = base ÷ (1 − imposto de saída%)     ← igual à base quando saída = 0
+lucro líquido   = preço − imposto de saída − CET
 ```
 
-Os quatro percentuais têm um **padrão por orçamento** e cada item pode sobrescrever
-qualquer um deles (campo em branco = padrão). O motor está em `lib/pricing.ts`, com
-testes em `tests/pricing.test.ts` (`npm test`).
+O motor está em `lib/pricing.ts`, com testes em `tests/pricing.test.ts` que reproduzem
+linhas reais da planilha (`npm test`).
 
-**Meta do cliente.** Informe quanto o cliente quer gastar (ex: R$ 10.000). O resumo
-mostra folga ou estouro e calcula o markup padrão que fecha exatamente na meta — com
-um clique ele é aplicado. Itens com markup próprio ficam fixos nessa conta.
-
-**Saídas.** "Copiar p/ cliente" gera o texto só com itens e preço de venda (sem custo
-nem margem); "Copiar resumo interno" traz custo, lucro e impostos; "Baixar CSV" exporta
-todas as colunas (abre direto no Excel em pt-BR); "Gerar ficha de produto" leva a lista
-de peças para a página inicial já preenchida.
+**Meta do cliente.** Informe quanto o cliente quer gastar. O resumo mostra folga ou estouro
+e calcula o markup que fecha exatamente na meta — um clique aplica. Peças com markup próprio
+ficam fixas nessa conta.
 
 **Persistência.** Os orçamentos ficam no `localStorage` do navegador de cada vendedor
-(seletor no topo da página: novo, duplicar, apagar). Não há banco de dados; o CSV
-serve de backup e para compartilhar.
+(seletor no topo: novo, duplicar, apagar). Não há banco de dados; o CSV (todas as opções,
+com custo, CET e margem) serve de backup e para compartilhar.
 
 ### Integração com o Bling
 
@@ -84,12 +72,11 @@ Com `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` configurados, aparece o painel **B
    virtual, classificados por slot. Uma página de 100 a cada 400 ms (o Bling limita a
    3 requisições/segundo), até 4.000 produtos, cache de 5 minutos; "recarregar" força
    uma nova leitura. Se a listagem não trouxer saldo, completa por `GET /estoques/saldos`.
-3. **Usar / Busca livre** — ao escolher um produto, busca o detalhe
-   (`GET /produtos/{id}`) para trazer o **preço de custo** já preenchido; se o Bling não
-   tiver custo cadastrado, avisa para preencher. "Busca livre" pesquisa por nome direto
-   na API, fora do catálogo em cache.
-4. **Atualizar estoque** — reconsulta o saldo (`GET /estoques/saldos`) de todos os itens
-   que vieram do Bling e atualiza o selo verde/amarelo/vermelho de cada linha
+3. **Escolher** — ao clicar num produto, busca o detalhe (`GET /produtos/{id}`) para
+   trazer o **preço de custo** já preenchido; se o Bling não tiver custo cadastrado, avisa
+   para preencher. "Buscar direto no Bling" pesquisa por nome na API, fora do cache.
+4. **Atualizar estoque das peças escolhidas** (menu ⋯) — reconsulta o saldo
+   (`GET /estoques/saldos`) e atualiza o selo verde/amarelo/vermelho de cada linha
    (verde: tem para a quantidade; amarelo: tem menos que a quantidade; vermelho: zerado).
 
 Para configurar, crie um aplicativo em <https://developer.bling.com.br> com escopo de

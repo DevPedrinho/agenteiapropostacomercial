@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
  */
 const QuoteWorkspace = dynamic(() => import("./QuoteWorkspace"), {
   ssr: false,
-  loading: () => <div className="empty-state">Carregando orçamentos…</div>,
+  loading: () => <div className="empty">Carregando orçamentos…</div>,
 });
 
 export default QuoteWorkspace;

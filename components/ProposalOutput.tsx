@@ -77,7 +77,7 @@ export default function ProposalOutput({ content, style, onStyleChange }: Props)
           <ProposalPreview content={content} style={style} />
 
           <div className="output-actions">
-            <button className="btn" type="button" onClick={handleCopy}>
+            <button className="btn primary" type="button" onClick={handleCopy}>
               Copiar
             </button>
             <button className="btn-secondary" type="button" onClick={handleCopySource}>

@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import QuoteItemsTable from "./QuoteItemsTable";
-import QuoteSummary from "./QuoteSummary";
-import BlingPanel from "./BlingPanel";
-import SetupBuilder from "./SetupBuilder";
-import { totalQuote } from "@/lib/pricing";
+import CatalogPane from "./CatalogPane";
+import BuildTable from "./BuildTable";
+import SummaryPane from "./SummaryPane";
+import { formatBRL, totalItems } from "@/lib/pricing";
 import {
   loadCurrentQuoteId,
   loadQuotes,
@@ -14,19 +13,31 @@ import {
   saveQuotes,
   setProposalHandoff,
 } from "@/lib/quote-storage";
-import { quoteToCsv, quoteToCustomerText, quoteToInternalText, quoteToPartsList } from "@/lib/quote-export";
 import {
+  quoteComparisonText,
+  quoteToCsv,
+  variantToCustomerText,
+  variantToInternalText,
+  variantToPartsList,
+} from "@/lib/quote-export";
+import {
+  activeVariant,
+  BLING_SUPPLIER,
   DEFAULT_RATES,
   newQuote,
   newQuoteItem,
+  newVariant,
+  type ItemCategory,
   type PricingRates,
   type Quote,
   type QuoteItem,
+  type Variant,
 } from "@/lib/quote-types";
-import type { BlingProduct, BlingStatus, CatalogProduct } from "@/lib/bling-client";
-import type { ItemCategory } from "@/lib/quote-types";
+import type { BlingProduct, BlingStatus, CatalogProduct, CatalogResponse } from "@/lib/bling-client";
 
 type Feedback = { kind: "ok" | "erro"; text: string } | null;
+
+export type Picker = { slot: ItemCategory; replaceItemId: string | null };
 
 type Props = {
   /** Resultado do retorno do OAuth do Bling, lido da URL pela página (?bling=ok|erro). */
@@ -43,7 +54,7 @@ function upsert(list: Quote[], quote: Quote): Quote[] {
 
 function feedbackFromBling(result: Props["blingResult"]): Feedback {
   if (!result) return null;
-  if (result.status === "ok") return { kind: "ok", text: "Bling conectado. Já dá pra buscar produtos e estoque." };
+  if (result.status === "ok") return { kind: "ok", text: "Bling conectado. O estoque está carregando." };
   return { kind: "erro", text: `Falha ao conectar ao Bling: ${result.detail ?? "erro desconhecido"}` };
 }
 
@@ -60,15 +71,68 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     return saved.find((q) => q.id === currentId) ?? saved[0] ?? newQuote();
   });
   const [feedback, setFeedback] = useState<Feedback>(() => feedbackFromBling(blingResult));
+  const feedbackTimer = useRef<number | null>(null);
   const [blingStatus, setBlingStatus] = useState<BlingStatus | null>(null);
+  const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [picker, setPicker] = useState<Picker>({ slot: "Processador", replaceItemId: null });
 
+  // ---- Bling: status e catálogo ------------------------------------------
   useEffect(() => {
     fetch("/api/bling/status")
       .then((r) => r.json())
       .then((st: BlingStatus) => setBlingStatus(st))
       .catch(() => setBlingStatus({ configured: false, connected: false }));
   }, []);
-  const feedbackTimer = useRef<number | null>(null);
+
+  const connected = blingStatus == null ? null : Boolean(blingStatus.connected);
+
+  async function requestCatalog(refresh: boolean): Promise<CatalogResponse | "unauthorized"> {
+    const res = await fetch(`/api/bling/catalogo${refresh ? "?refresh=1" : ""}`);
+    const data = await res.json();
+    if (res.status === 401) return "unauthorized";
+    if (!res.ok) throw new Error(data.error || "Erro ao carregar o estoque.");
+    return data as CatalogResponse;
+  }
+
+  function applyCatalog(result: CatalogResponse | "unauthorized") {
+    if (result === "unauthorized") {
+      setBlingStatus((st) => (st ? { ...st, connected: false } : st));
+      return;
+    }
+    setCatalog(result);
+    setCatalogError(null);
+  }
+
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    requestCatalog(false)
+      .then((r) => {
+        if (!cancelled) applyCatalog(r);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setCatalogError(err instanceof Error ? err.message : "Erro ao carregar o estoque.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connected]);
+
+  function reloadCatalog() {
+    setCatalogLoading(true);
+    requestCatalog(true)
+      .then(applyCatalog)
+      .catch((err: unknown) => setCatalogError(err instanceof Error ? err.message : "Erro ao carregar o estoque."))
+      .finally(() => setCatalogLoading(false));
+  }
+
+  async function disconnectBling() {
+    await fetch("/api/bling/disconnect", { method: "POST" });
+    setBlingStatus((st) => (st ? { ...st, connected: false } : st));
+    setCatalog(null);
+  }
 
   // Limpa ?bling=… da URL depois de mostrar o aviso.
   useEffect(() => {
@@ -81,7 +145,6 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     saveCurrentQuoteId(quote.id);
   }, [quote]);
 
-  // Lista do seletor: os salvos + o atual (que pode ainda não ter sido gravado).
   const quotes = useMemo(() => upsert(savedQuotes, quote), [savedQuotes, quote]);
 
   function notify(kind: "ok" | "erro", text: string) {
@@ -94,50 +157,70 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     setQuote((q) => ({ ...q, ...patch, updatedAt: new Date().toISOString() }));
   }, []);
 
-  const totals = useMemo(() => totalQuote(quote), [quote]);
+  const variant = activeVariant(quote);
+  const items = variant.items;
+  const totals = useMemo(() => totalItems(items, quote.defaults, quote.targetBudget), [items, quote.defaults, quote.targetBudget]);
+
+  // ---- opções (variantes) ------------------------------------------------
+  function updateVariant(id: string, patch: Partial<Variant>) {
+    update({ variants: quote.variants.map((v) => (v.id === id ? { ...v, ...patch } : v)) });
+  }
+  function setItems(next: QuoteItem[]) {
+    updateVariant(variant.id, { items: next });
+  }
+  function addVariant(copyFrom?: Variant) {
+    const v = newVariant(`Opção ${quote.variants.length + 1}`, copyFrom ? copyFrom.items.map((i) => ({ ...i, id: newQuoteItem().id })) : []);
+    update({ variants: [...quote.variants, v], activeVariantId: v.id });
+  }
+  function removeVariant(id: string) {
+    if (quote.variants.length <= 1) return;
+    if (!window.confirm("Apagar esta opção?")) return;
+    const rest = quote.variants.filter((v) => v.id !== id);
+    update({ variants: rest, activeVariantId: quote.activeVariantId === id ? rest[0].id : quote.activeVariantId });
+  }
+  function renameVariant(id: string) {
+    const v = quote.variants.find((x) => x.id === id);
+    if (!v) return;
+    const name = window.prompt("Nome da opção", v.name);
+    if (name && name.trim()) updateVariant(id, { name: name.trim() });
+  }
 
   // ---- itens -------------------------------------------------------------
   function addItem(partial: Partial<QuoteItem> = {}) {
-    update({ items: [...quote.items, newQuoteItem(partial)] });
+    setItems([...items, newQuoteItem(partial)]);
   }
   function updateItem(id: string, patch: Partial<QuoteItem>) {
-    update({ items: quote.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) });
+    setItems(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   }
   function removeItem(id: string) {
-    update({ items: quote.items.filter((i) => i.id !== id) });
-  }
-  function moveItem(id: string, dir: -1 | 1) {
-    const idx = quote.items.findIndex((i) => i.id === id);
-    const to = idx + dir;
-    if (idx === -1 || to < 0 || to >= quote.items.length) return;
-    const items = quote.items.slice();
-    [items[idx], items[to]] = [items[to], items[idx]];
-    update({ items });
+    setItems(items.filter((i) => i.id !== id));
+    if (picker.replaceItemId === id) setPicker({ ...picker, replaceItemId: null });
   }
 
-  function addFromBling(product: BlingProduct, category?: ItemCategory, replaceItemId: string | null = null) {
+  function placeProduct(product: BlingProduct, slot: ItemCategory, replaceItemId: string | null) {
     const patch: Partial<QuoteItem> = {
       name: product.name,
+      supplier: BLING_SUPPLIER,
       cost: product.cost ?? 0,
       blingProductId: product.id,
       blingCode: product.code || undefined,
       stock: product.stock,
       stockCheckedAt: new Date().toISOString(),
     };
-    if (replaceItemId && quote.items.some((i) => i.id === replaceItemId)) {
+    if (replaceItemId && items.some((i) => i.id === replaceItemId)) {
       updateItem(replaceItemId, patch);
     } else {
-      addItem({ ...patch, category: category ?? ("slot" in product ? (product as CatalogProduct).slot : "Outro") });
+      addItem({ ...patch, category: slot });
     }
     if (product.cost == null) {
-      notify("erro", `“${product.name}” não tem preço de custo no Bling — preencha o custo na linha.`);
+      notify("erro", `“${product.name}” não tem preço de custo no Bling. Preencha o custo na linha.`);
     } else {
-      notify("ok", `“${product.name}” adicionado com custo ${product.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`);
+      notify("ok", `${product.name} · custo ${formatBRL(product.cost)}`);
     }
   }
 
-  /** Escolha no montador: busca o detalhe (custo) e adiciona/troca no slot. */
-  async function pickFromCatalog(product: CatalogProduct, slot: ItemCategory, replaceItemId: string | null) {
+  /** Escolha no estoque: busca o detalhe (custo) e coloca no slot ativo. */
+  async function pickFromCatalog(product: CatalogProduct | BlingProduct) {
     let full: BlingProduct = product;
     if (product.cost == null) {
       try {
@@ -145,36 +228,34 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
         const data = await res.json();
         if (res.ok && data.product) full = { ...product, ...(data.product as BlingProduct), stock: product.stock ?? data.product.stock };
       } catch {
-        // segue sem custo; o aviso abaixo cobre
+        // segue sem custo; o aviso cobre
       }
     }
-    addFromBling(full, slot, replaceItemId);
+    placeProduct(full, picker.slot, picker.replaceItemId);
+    setPicker({ slot: picker.slot, replaceItemId: null });
   }
 
   async function refreshStock() {
-    const ids = quote.items.map((i) => i.blingProductId).filter((n): n is number => typeof n === "number");
+    const ids = items.map((i) => i.blingProductId).filter((n): n is number => typeof n === "number");
     if (ids.length === 0) {
-      notify("erro", "Nenhum item veio do Bling. Use “Buscar no Bling” para adicionar com estoque.");
+      notify("erro", "Nenhuma peça desta opção veio do Bling.");
       return;
     }
     try {
       const res = await fetch(`/api/bling/estoque?ids=${ids.join(",")}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao consultar estoque.");
-      const byId = new Map<number, { virtual: number | null; physical: number | null }>(
-        (data.balances as { productId: number; virtual: number | null; physical: number | null }[]).map((b) => [
-          b.productId,
-          b,
-        ])
+      const byId = new Map<number, { virtual: number | null }>(
+        (data.balances as { productId: number; virtual: number | null }[]).map((b) => [b.productId, b])
       );
-      update({
-        items: quote.items.map((i) =>
+      setItems(
+        items.map((i) =>
           i.blingProductId && byId.has(i.blingProductId)
             ? { ...i, stock: byId.get(i.blingProductId)!.virtual, stockCheckedAt: data.checkedAt }
             : i
-        ),
-      });
-      notify("ok", "Estoque atualizado.");
+        )
+      );
+      notify("ok", "Estoque das peças atualizado.");
     } catch (err) {
       notify("erro", err instanceof Error ? err.message : "Erro ao consultar estoque.");
     }
@@ -190,7 +271,7 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     if (q) setQuote(q);
   }
   function deleteCurrent() {
-    if (!window.confirm("Apagar este orçamento? Não dá pra desfazer.")) return;
+    if (!window.confirm("Apagar este orçamento inteiro (todas as opções)? Não dá pra desfazer.")) return;
     const rest = quotes.filter((q) => q.id !== quote.id);
     saveQuotes(rest);
     setSavedQuotes(rest);
@@ -199,13 +280,15 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
   function duplicateCurrent() {
     setSavedQuotes(quotes);
     const copy = newQuote(quote.defaults);
+    const variants = quote.variants.map((v) => ({ ...v, id: newQuoteItem().id, items: v.items.map((i) => ({ ...i, id: newQuoteItem().id })) }));
     setQuote({
       ...copy,
-      name: quote.name ? `${quote.name} (cópia)` : "",
       customer: quote.customer,
+      name: quote.name ? `${quote.name} (cópia)` : "",
       targetBudget: quote.targetBudget,
       notes: quote.notes,
-      items: quote.items.map((i) => ({ ...i, id: newQuoteItem().id })),
+      variants,
+      activeVariantId: variants[0].id,
     });
   }
 
@@ -223,206 +306,141 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `orcamento-${(quote.name || quote.customer || "upar").replace(/[^\w-]+/g, "_")}.csv`;
+    a.download = `orcamento-${(quote.customer || quote.name || "upar").replace(/[^\w-]+/g, "_")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
   function sendToProposal() {
-    setProposalHandoff({ productName: quote.name, rawSpecs: quoteToPartsList(quote) });
+    setProposalHandoff({ productName: quote.name, rawSpecs: variantToPartsList(variant) });
     router.push("/");
   }
 
-  const hasItems = quote.items.length > 0;
+  const hasItems = items.length > 0;
 
   return (
-    <div className="quote-layout">
-      {feedback && <div className={feedback.kind === "ok" ? "toast toast-ok" : "toast toast-erro"}>{feedback.text}</div>}
+    <div className="ws">
+      {feedback && <div className={`toast ${feedback.kind === "ok" ? "toast-ok" : "toast-erro"}`}>{feedback.text}</div>}
 
-      <section className="panel quote-header-panel">
-        <div className="quote-toolbar">
-          <div className="quote-picker">
-            <label htmlFor="quotePicker">Orçamento</label>
-            <select id="quotePicker" value={quote.id} onChange={(e) => selectQuote(e.target.value)}>
+      <header className="ws-head">
+        <div className="ws-quote">
+          <label className="ws-label" htmlFor="quotePicker">Orçamento</label>
+          <div className="ws-quote-row">
+            <select id="quotePicker" className="select" value={quote.id} onChange={(e) => selectQuote(e.target.value)}>
               {quotes.map((q) => (
                 <option key={q.id} value={q.id}>
-                  {q.name || q.customer || "Sem nome"} — {q.items.length} item(ns) —{" "}
-                  {new Date(q.updatedAt).toLocaleDateString("pt-BR")}
+                  {(q.customer || q.name || "Sem nome") + (q.customer && q.name ? ` — ${q.name}` : "")} ·{" "}
+                  {q.variants.length} opção(ões) · {new Date(q.updatedAt).toLocaleDateString("pt-BR")}
                 </option>
               ))}
             </select>
-          </div>
-          <div className="quote-toolbar-actions">
-            <button className="btn-secondary" onClick={startNew}>+ Novo</button>
-            <button className="btn-secondary" onClick={duplicateCurrent} disabled={!hasItems}>Duplicar</button>
-            <button className="btn-secondary btn-danger" onClick={deleteCurrent}>Apagar</button>
+            <button className="btn ghost" onClick={startNew}>Novo</button>
+            <button className="btn ghost" onClick={duplicateCurrent}>Duplicar</button>
+            <button className="btn ghost danger" onClick={deleteCurrent}>Apagar</button>
           </div>
         </div>
-
-        <div className="quote-meta-grid">
-          <div className="field">
-            <label htmlFor="quoteName">Nome do orçamento / máquina</label>
-            <input
-              id="quoteName"
-              value={quote.name}
-              onChange={(e) => update({ name: e.target.value })}
-              placeholder="Ex: UPAR ENTERPRISE i5 14400F"
-            />
-          </div>
-          <div className="field">
+        <div className="ws-fields">
+          <div className="fld">
             <label htmlFor="quoteCustomer">Cliente</label>
-            <input
-              id="quoteCustomer"
-              value={quote.customer}
-              onChange={(e) => update({ customer: e.target.value })}
-              placeholder="Nome ou empresa"
-            />
+            <input id="quoteCustomer" value={quote.customer} onChange={(e) => update({ customer: e.target.value })} placeholder="Nome ou empresa" />
           </div>
-          <div className="field">
-            <label htmlFor="quoteTarget">Meta do cliente (R$)</label>
-            <input
-              id="quoteTarget"
-              type="number"
-              min={0}
-              step={100}
-              value={quote.targetBudget ?? ""}
-              onChange={(e) => update({ targetBudget: e.target.value === "" ? null : Number(e.target.value) })}
-              placeholder="Ex: 10000"
-            />
+          <div className="fld">
+            <label htmlFor="quoteName">Máquina / projeto</label>
+            <input id="quoteName" value={quote.name} onChange={(e) => update({ name: e.target.value })} placeholder="Ex: Estação de edição 4K" />
+          </div>
+          <div className="fld fld-money">
+            <label htmlFor="quoteTarget">Meta do cliente</label>
+            <div className="money">
+              <span>R$</span>
+              <input
+                id="quoteTarget"
+                type="number"
+                min={0}
+                step={100}
+                value={quote.targetBudget ?? ""}
+                onChange={(e) => update({ targetBudget: e.target.value === "" ? null : Number(e.target.value) })}
+                placeholder="10000"
+              />
+            </div>
           </div>
         </div>
+      </header>
 
-        <RatesEditor
-          rates={quote.defaults}
-          onChange={(defaults) => update({ defaults })}
-          onReset={() => update({ defaults: { ...DEFAULT_RATES } })}
-        />
-      </section>
-
-      <BlingPanel
-        status={blingStatus}
-        onStatusChange={setBlingStatus}
-        onAdd={(p) => addFromBling(p)}
-        onRefreshStock={refreshStock}
-        hasBlingItems={quote.items.some((i) => i.blingProductId)}
-      />
-
-      <SetupBuilder
-        items={quote.items}
-        defaults={quote.defaults}
-        connected={blingStatus == null ? null : Boolean(blingStatus.connected)}
-        onPick={pickFromCatalog}
-        onAddManual={(slot) => addItem({ category: slot })}
-        onUpdateItem={updateItem}
-        onRemoveItem={removeItem}
-        onSessionLost={() => setBlingStatus((st) => (st ? { ...st, connected: false } : st))}
-      />
-
-      <details className="panel details-panel" open={!blingStatus?.connected && hasItems}>
-        <summary>
-          <span>Planilha detalhada</span>
-          <span className="field-hint">
-            custo, link, imposto de entrada, markup, CET e imposto de saída por item · {quote.items.length} item(ns)
+      <div className="ws-tabs" role="tablist" aria-label="Opções de máquina">
+        {quote.variants.map((v) => {
+          const t = totalItems(v.items, quote.defaults);
+          const active = v.id === variant.id;
+          return (
+            <button
+              key={v.id}
+              role="tab"
+              aria-selected={active}
+              className={`tab ${active ? "active" : ""}`}
+              onClick={() => update({ activeVariantId: v.id })}
+              onDoubleClick={() => renameVariant(v.id)}
+              title="Duplo clique para renomear"
+            >
+              <span className="tab-name">{v.name}</span>
+              <span className="tab-total">{v.items.length ? formatBRL(t.price) : "vazia"}</span>
+            </button>
+          );
+        })}
+        <button className="tab tab-add" onClick={() => addVariant()} title="Nova opção em branco">+ Opção</button>
+        <button className="tab tab-add" onClick={() => addVariant(variant)} title="Copia a opção atual para variar peças">+ Copiar esta</button>
+        {quote.variants.length > 1 && (
+          <span className="tab-tools">
+            <button className="link-btn" onClick={() => renameVariant(variant.id)}>renomear</button>
+            <button className="link-btn danger" onClick={() => removeVariant(variant.id)}>apagar opção</button>
           </span>
-        </summary>
-        <div className="panel-title-row details-actions">
-          <span />
-          <button className="btn-secondary" onClick={() => addItem()}>+ Item manual</button>
-        </div>
-        <QuoteItemsTable
-          items={quote.items}
-          defaults={quote.defaults}
-          onChange={updateItem}
-          onRemove={removeItem}
-          onMove={moveItem}
-        />
-        {!hasItems && (
-          <div className="empty-state">
-            Nenhum item ainda. Escolha as peças no montador acima ou adicione uma linha manual.
-          </div>
         )}
-      </details>
-
-      <QuoteSummary
-        quote={quote}
-        totals={totals}
-        onApplyMarkup={(markup) => update({ defaults: { ...quote.defaults, markupPct: markup } })}
-      />
-
-      <section className="panel">
-        <h2>Saída</h2>
-        <div className="field">
-          <label htmlFor="quoteNotes">Observações para o cliente (prazo, garantia, forma de pagamento…)</label>
-          <textarea
-            id="quoteNotes"
-            rows={3}
-            value={quote.notes}
-            onChange={(e) => update({ notes: e.target.value })}
-            placeholder="Ex: Garantia de 12 meses. Entrega em até 5 dias úteis. Parcelamos em até 10x."
-          />
-        </div>
-        <div className="output-actions wrap">
-          <button className="btn" onClick={() => copyText(quoteToCustomerText(quote), "Orçamento para o cliente")} disabled={!hasItems}>
-            Copiar p/ cliente
-          </button>
-          <button className="btn-secondary" onClick={() => copyText(quoteToInternalText(quote), "Resumo interno")} disabled={!hasItems}>
-            Copiar resumo interno
-          </button>
-          <button className="btn-secondary" onClick={downloadCsv} disabled={!hasItems}>
-            Baixar CSV (planilha)
-          </button>
-          <button className="btn-secondary" onClick={sendToProposal} disabled={!hasItems}>
-            Gerar ficha de produto →
-          </button>
-        </div>
-        <p className="copy-hint">
-          “Copiar p/ cliente” sai só com item e preço de venda, sem custo nem margem. O CSV traz
-          todas as colunas internas e abre direto no Excel.
-        </p>
-      </section>
-    </div>
-  );
-}
-
-function RatesEditor({
-  rates,
-  onChange,
-  onReset,
-}: {
-  rates: PricingRates;
-  onChange: (r: PricingRates) => void;
-  onReset: () => void;
-}) {
-  const fields: { key: keyof PricingRates; label: string; hint: string }[] = [
-    { key: "inboundTaxPct", label: "Imposto de entrada %", hint: "Sobre o custo de compra" },
-    { key: "markupPct", label: "Markup %", hint: "Sobre o custo com entrada" },
-    { key: "cetPct", label: "CET %", hint: "Taxa do cartão / parcelamento, sobre a venda" },
-    { key: "outboundTaxPct", label: "Imposto de saída %", hint: "Sobre o preço de venda" },
-  ];
-  return (
-    <div className="rates-editor">
-      <div className="rates-title">
-        <span>Padrões do orçamento</span>
-        <button className="link-btn" onClick={onReset} type="button">restaurar</button>
       </div>
-      <div className="rates-grid">
-        {fields.map((f) => (
-          <div className="field" key={f.key}>
-            <label htmlFor={`rate-${f.key}`}>{f.label}</label>
-            <input
-              id={`rate-${f.key}`}
-              type="number"
-              step={0.1}
-              value={rates[f.key]}
-              onChange={(e) => onChange({ ...rates, [f.key]: Number(e.target.value) || 0 })}
-            />
-            <p className="field-hint">{f.hint}</p>
-          </div>
-        ))}
+
+      <div className="ws-body">
+        <CatalogPane
+          status={blingStatus}
+          catalog={catalog}
+          loading={catalogLoading || (Boolean(connected) && catalog == null && catalogError == null)}
+          error={catalogError}
+          picker={picker}
+          replacingItem={picker.replaceItemId ? items.find((i) => i.id === picker.replaceItemId) ?? null : null}
+          onPickerChange={setPicker}
+          onPick={pickFromCatalog}
+          onReload={reloadCatalog}
+          onDisconnect={disconnectBling}
+          onRefreshStock={refreshStock}
+        />
+        <BuildTable
+          items={items}
+          defaults={quote.defaults}
+          onDefaultsChange={(defaults: PricingRates) => update({ defaults })}
+          onResetDefaults={() => update({ defaults: { ...DEFAULT_RATES } })}
+          picker={picker}
+          connected={Boolean(connected)}
+          onChoose={(slot, replaceItemId) => setPicker({ slot, replaceItemId })}
+          onAddManual={(slot) => addItem({ category: slot })}
+          onUpdateItem={updateItem}
+          onRemoveItem={removeItem}
+        />
+        <SummaryPane
+          quote={quote}
+          variant={variant}
+          totals={totals}
+          hasItems={hasItems}
+          onApplyMarkup={(markupPct) => update({ defaults: { ...quote.defaults, markupPct } })}
+          onSelectVariant={(id) => update({ activeVariantId: id })}
+          onNotesChange={(notes) => update({ notes })}
+          onCopyCustomer={() => copyText(variantToCustomerText(quote, variant), "Orçamento para o cliente")}
+          onCopyInternal={() =>
+            copyText(
+              quote.variants.length > 1
+                ? `${variantToInternalText(quote, variant)}\n\nComparativo:\n${quoteComparisonText(quote)}`
+                : variantToInternalText(quote, variant),
+              "Resumo interno"
+            )
+          }
+          onDownloadCsv={downloadCsv}
+          onSendToProposal={sendToProposal}
+        />
       </div>
-      <p className="field-hint">
-        Preço = custo × (1 + entrada) × (1 + markup) ÷ (1 − saída − CET). Cada item pode
-        sobrescrever qualquer percentual; em branco usa o padrão.
-      </p>
     </div>
   );
 }

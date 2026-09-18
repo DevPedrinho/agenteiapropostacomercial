@@ -71,7 +71,7 @@ export default function SpecEditor({ value, onChange, onSubmit, loading }: Props
         />
       </div>
 
-      <button className="btn" onClick={onSubmit} disabled={!canSubmit}>
+      <button className="btn primary" onClick={onSubmit} disabled={!canSubmit}>
         {loading ? "Gerando..." : "Gerar proposta"}
       </button>
     </section>
