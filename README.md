@@ -5,12 +5,38 @@ Duas ferramentas para o time de vendas da Upar, no mesmo app:
 | Rota | O que faz |
 |---|---|
 | `/` | **Ficha de produto** — gera a ficha no padrão Dell/Lenovo a partir da lista de peças (IA) |
-| `/orcamento` | **Montador de orçamento** — substitui a planilha: item a item com custo, imposto de entrada, markup, CET e imposto de saída, com estoque puxado do Bling |
+| `/orcamento` | **Montador de setup** — substitui a planilha: o vendedor monta a máquina slot por slot (processador, placa-mãe, memória…) escolhendo do estoque do Bling, e o orçamento sai com custo, imposto de entrada, markup, CET e imposto de saída |
 
-## Montador de orçamento (`/orcamento`)
+## Montador de setup (`/orcamento`)
 
-O vendedor monta a máquina peça por peça. Cada linha tem categoria, nome, link do
-produto no fornecedor, quantidade, custo e quatro percentuais — os mesmos da planilha:
+### Fase 1 (esta): montagem manual a partir do estoque do Bling
+
+A tela tem os slots de uma máquina — processador, placa-mãe, memória RAM,
+armazenamento, placa de vídeo, fonte, gabinete, refrigeração — e um grupo de extras
+(sistema operacional, monitor, periféricos, serviço/montagem, outros). Com o Bling
+conectado, o app carrega **o catálogo inteiro de produtos ativos** (`GET /produtos`,
+paginado, com cache de 5 minutos no servidor) e classifica cada produto num slot pelo
+nome (`lib/slots.ts`, com testes em `tests/slots.test.ts`). Ao clicar em **Escolher**
+num slot, a coluna da direita lista o que existe naquele slot **com estoque**, e o botão
+**Usar** coloca a peça no slot já com o preço de custo do Bling. Dá para **trocar** a
+peça, mudar a quantidade, adicionar mais de uma no mesmo slot (duas memórias, dois SSDs)
+e, quando o produto não está no Bling, usar **+ manual** e preencher nome e custo na
+planilha detalhada. O filtro de texto busca por palavras no catálogo inteiro (a
+classificação por nome pode errar em produtos com nome fora do padrão; o resultado mostra
+em qual slot o produto foi classificado).
+
+### Fase 2 (planejada): agente de IA
+
+O vendedor descreve a configuração desejada ("i5 de 14ª geração, 32 GB DDR5, RTX 4060,
+SSD 1 TB, até R$ 8.000") e um agente pesquisa o catálogo do Bling, verifica estoque e
+compatibilidade (soquete, DDR, potência da fonte) e propõe o setup pronto, que o
+vendedor revisa nesta mesma tela. A base para isso já existe: o catálogo classificado,
+o motor de preço e a ponte para a ficha de produto.
+
+### Precificação
+
+Cada linha tem categoria, nome, link do produto no fornecedor, quantidade, custo e
+quatro percentuais — os mesmos da planilha:
 
 | Percentual | Incide sobre | Exemplo |
 |---|---|---|
@@ -46,7 +72,7 @@ de peças para a página inicial já preenchida.
 (seletor no topo da página: novo, duplicar, apagar). Não há banco de dados; o CSV
 serve de backup e para compartilhar.
 
-### Estoque direto do Bling
+### Integração com o Bling
 
 Com `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` configurados, aparece o painel **Bling**:
 
@@ -54,11 +80,15 @@ Com `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` configurados, aparece o painel **B
    vez no próprio navegador; o token fica num cookie `httpOnly` criptografado
    (AES-256-GCM) e é renovado sozinho pelo refresh token (30 dias, renovado a cada uso).
    Não há tabela de tokens no servidor.
-2. **Buscar no Bling** — pesquisa por nome nos produtos ativos (`GET /produtos`) e mostra
-   código, saldo virtual em estoque e preço de venda cadastrado. "Adicionar" busca o
-   detalhe do produto (`GET /produtos/{id}`) para trazer o **preço de custo** já
-   preenchido na linha; se o Bling não tiver custo cadastrado, avisa para preencher.
-3. **Atualizar estoque** — reconsulta o saldo (`GET /estoques/saldos`) de todos os itens
+2. **Catálogo** (`GET /api/bling/catalogo`) — todos os produtos ativos, com saldo
+   virtual, classificados por slot. Uma página de 100 a cada 400 ms (o Bling limita a
+   3 requisições/segundo), até 4.000 produtos, cache de 5 minutos; "recarregar" força
+   uma nova leitura. Se a listagem não trouxer saldo, completa por `GET /estoques/saldos`.
+3. **Usar / Busca livre** — ao escolher um produto, busca o detalhe
+   (`GET /produtos/{id}`) para trazer o **preço de custo** já preenchido; se o Bling não
+   tiver custo cadastrado, avisa para preencher. "Busca livre" pesquisa por nome direto
+   na API, fora do catálogo em cache.
+4. **Atualizar estoque** — reconsulta o saldo (`GET /estoques/saldos`) de todos os itens
    que vieram do Bling e atualiza o selo verde/amarelo/vermelho de cada linha
    (verde: tem para a quantidade; amarelo: tem menos que a quantidade; vermelho: zerado).
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import QuoteItemsTable from "./QuoteItemsTable";
 import QuoteSummary from "./QuoteSummary";
 import BlingPanel from "./BlingPanel";
+import SetupBuilder from "./SetupBuilder";
 import { totalQuote } from "@/lib/pricing";
 import {
   loadCurrentQuoteId,
@@ -22,7 +23,8 @@ import {
   type Quote,
   type QuoteItem,
 } from "@/lib/quote-types";
-import type { BlingProduct } from "@/lib/bling-client";
+import type { BlingProduct, BlingStatus, CatalogProduct } from "@/lib/bling-client";
+import type { ItemCategory } from "@/lib/quote-types";
 
 type Feedback = { kind: "ok" | "erro"; text: string } | null;
 
@@ -58,6 +60,14 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     return saved.find((q) => q.id === currentId) ?? saved[0] ?? newQuote();
   });
   const [feedback, setFeedback] = useState<Feedback>(() => feedbackFromBling(blingResult));
+  const [blingStatus, setBlingStatus] = useState<BlingStatus | null>(null);
+
+  useEffect(() => {
+    fetch("/api/bling/status")
+      .then((r) => r.json())
+      .then((st: BlingStatus) => setBlingStatus(st))
+      .catch(() => setBlingStatus({ configured: false, connected: false }));
+  }, []);
   const feedbackTimer = useRef<number | null>(null);
 
   // Limpa ?bling=… da URL depois de mostrar o aviso.
@@ -105,20 +115,40 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
     update({ items });
   }
 
-  function addFromBling(product: BlingProduct) {
-    addItem({
+  function addFromBling(product: BlingProduct, category?: ItemCategory, replaceItemId: string | null = null) {
+    const patch: Partial<QuoteItem> = {
       name: product.name,
       cost: product.cost ?? 0,
       blingProductId: product.id,
       blingCode: product.code || undefined,
       stock: product.stock,
       stockCheckedAt: new Date().toISOString(),
-    });
+    };
+    if (replaceItemId && quote.items.some((i) => i.id === replaceItemId)) {
+      updateItem(replaceItemId, patch);
+    } else {
+      addItem({ ...patch, category: category ?? ("slot" in product ? (product as CatalogProduct).slot : "Outro") });
+    }
     if (product.cost == null) {
       notify("erro", `“${product.name}” não tem preço de custo no Bling — preencha o custo na linha.`);
     } else {
       notify("ok", `“${product.name}” adicionado com custo ${product.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`);
     }
+  }
+
+  /** Escolha no montador: busca o detalhe (custo) e adiciona/troca no slot. */
+  async function pickFromCatalog(product: CatalogProduct, slot: ItemCategory, replaceItemId: string | null) {
+    let full: BlingProduct = product;
+    if (product.cost == null) {
+      try {
+        const res = await fetch(`/api/bling/produtos/${product.id}`);
+        const data = await res.json();
+        if (res.ok && data.product) full = { ...product, ...(data.product as BlingProduct), stock: product.stock ?? data.product.stock };
+      } catch {
+        // segue sem custo; o aviso abaixo cobre
+      }
+    }
+    addFromBling(full, slot, replaceItemId);
   }
 
   async function refreshStock() {
@@ -268,11 +298,34 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
         />
       </section>
 
-      <BlingPanel onAdd={addFromBling} onRefreshStock={refreshStock} hasBlingItems={quote.items.some((i) => i.blingProductId)} />
+      <BlingPanel
+        status={blingStatus}
+        onStatusChange={setBlingStatus}
+        onAdd={(p) => addFromBling(p)}
+        onRefreshStock={refreshStock}
+        hasBlingItems={quote.items.some((i) => i.blingProductId)}
+      />
 
-      <section className="panel">
-        <div className="panel-title-row">
-          <h2>Itens</h2>
+      <SetupBuilder
+        items={quote.items}
+        defaults={quote.defaults}
+        connected={blingStatus == null ? null : Boolean(blingStatus.connected)}
+        onPick={pickFromCatalog}
+        onAddManual={(slot) => addItem({ category: slot })}
+        onUpdateItem={updateItem}
+        onRemoveItem={removeItem}
+        onSessionLost={() => setBlingStatus((st) => (st ? { ...st, connected: false } : st))}
+      />
+
+      <details className="panel details-panel" open={!blingStatus?.connected && hasItems}>
+        <summary>
+          <span>Planilha detalhada</span>
+          <span className="field-hint">
+            custo, link, imposto de entrada, markup, CET e imposto de saída por item · {quote.items.length} item(ns)
+          </span>
+        </summary>
+        <div className="panel-title-row details-actions">
+          <span />
           <button className="btn-secondary" onClick={() => addItem()}>+ Item manual</button>
         </div>
         <QuoteItemsTable
@@ -284,11 +337,10 @@ export default function QuoteWorkspace({ blingResult = null }: Props) {
         />
         {!hasItems && (
           <div className="empty-state">
-            Adicione peças manualmente ou busque no Bling. Cada linha calcula o preço de venda com
-            imposto de entrada, markup, CET e imposto de saída.
+            Nenhum item ainda. Escolha as peças no montador acima ou adicione uma linha manual.
           </div>
         )}
-      </section>
+      </details>
 
       <QuoteSummary
         quote={quote}

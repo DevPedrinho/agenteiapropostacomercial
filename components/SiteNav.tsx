@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/", label: "Ficha de produto" },
-  { href: "/orcamento", label: "Orçamento" },
+  { href: "/orcamento", label: "Montador de setup" },
 ];
 
 export default function SiteNav() {

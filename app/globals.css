@@ -1034,3 +1034,272 @@ main.wide {
   border: 1px solid rgba(255, 107, 107, 0.4);
   color: var(--danger);
 }
+
+/* =========================================================================
+   Montador de setup (slots + catálogo)
+   ========================================================================= */
+.catalog-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.catalog-status .field-hint {
+  margin: 0;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .setup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.slots-col {
+  display: grid;
+  gap: 8px;
+}
+
+.slot-card {
+  background: #0d0f14;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.slot-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.25);
+}
+
+.slot-card.empty {
+  border-style: dashed;
+}
+
+.slot-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.slot-icon {
+  margin-right: 4px;
+}
+
+.slot-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.slot-available {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.btn-small {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+}
+
+.slot-hint {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.slot-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--panel-border);
+}
+
+.slot-item.replacing {
+  outline: 1px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.slot-item-main {
+  min-width: 0;
+}
+
+.slot-item-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.slot-item-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.slot-qty {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-qty .icon-btn {
+  width: 24px;
+  height: 26px;
+}
+
+.slot-price {
+  font-weight: 700;
+  font-size: 0.9rem;
+  min-width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.catalog-col {
+  background: #0d0f14;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+}
+
+.catalog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.catalog-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.catalog-mode {
+  color: var(--accent);
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+.check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.catalog-search {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.catalog-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.catalog-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+
+.catalog-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.catalog-row .btn {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.catalog-other {
+  color: #fbbf24;
+}
+
+.extras-toggle {
+  justify-self: start;
+}
+
+/* Planilha detalhada recolhível */
+.details-panel > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.details-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.details-panel > summary::before {
+  content: "▸";
+  margin-right: 8px;
+  color: var(--text-muted);
+}
+
+.details-panel[open] > summary::before {
+  content: "▾";
+}
+
+.details-panel > summary .field-hint {
+  margin: 0;
+  font-weight: 400;
+}
+
+.details-actions {
+  margin-top: 14px;
+}

@@ -5,26 +5,20 @@ import type { BlingProduct, BlingStatus } from "@/lib/bling-client";
 import { formatBRL } from "@/lib/pricing";
 
 type Props = {
+  status: BlingStatus | null;
+  onStatusChange: (update: (s: BlingStatus | null) => BlingStatus | null) => void;
   onAdd: (product: BlingProduct) => void;
   onRefreshStock: () => Promise<void>;
   hasBlingItems: boolean;
 };
 
-export default function BlingPanel({ onAdd, onRefreshStock, hasBlingItems }: Props) {
-  const [status, setStatus] = useState<BlingStatus | null>(null);
+export default function BlingPanel({ status, onStatusChange, onAdd, onRefreshStock, hasBlingItems }: Props) {
   const [open, setOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/bling/status")
-      .then((r) => r.json())
-      .then((s: BlingStatus) => setStatus(s))
-      .catch(() => setStatus({ configured: false, connected: false }));
-  }, []);
-
   async function disconnect() {
     await fetch("/api/bling/disconnect", { method: "POST" });
-    setStatus((s) => (s ? { ...s, connected: false } : s));
+    onStatusChange((s) => (s ? { ...s, connected: false } : s));
   }
 
   async function refresh() {
@@ -47,7 +41,7 @@ export default function BlingPanel({ onAdd, onRefreshStock, hasBlingItems }: Pro
               "Integração não configurada no servidor (BLING_CLIENT_ID / BLING_CLIENT_SECRET)."}
             {status?.configured && !status.connected &&
               "Conecte sua conta do Bling para buscar produtos com estoque e preço de custo."}
-            {status?.configured && status.connected && "Conectado. Busque produtos do estoque e adicione ao orçamento."}
+            {status?.configured && status.connected && "Conectado. Monte o setup escolhendo do estoque abaixo, ou faça uma busca livre."}
           </p>
         </div>
         <div className="bling-actions">
@@ -56,7 +50,7 @@ export default function BlingPanel({ onAdd, onRefreshStock, hasBlingItems }: Pro
           )}
           {status?.connected && (
             <>
-              <button className="btn" onClick={() => setOpen(true)}>Buscar no Bling</button>
+              <button className="btn-secondary" onClick={() => setOpen(true)}>Busca livre</button>
               <button className="btn-secondary" onClick={refresh} disabled={!hasBlingItems || refreshing}>
                 {refreshing ? "Atualizando…" : "Atualizar estoque"}
               </button>
@@ -70,7 +64,7 @@ export default function BlingPanel({ onAdd, onRefreshStock, hasBlingItems }: Pro
           onClose={() => setOpen(false)}
           onAdd={onAdd}
           onSessionLost={() => {
-            setStatus((s) => (s ? { ...s, connected: false } : s));
+            onStatusChange((s) => (s ? { ...s, connected: false } : s));
             setOpen(false);
           }}
         />

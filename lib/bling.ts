@@ -1,5 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { classifyProductName } from "./slots";
+import type { ItemCategory } from "./quote-types";
 
 /**
  * Cliente da API v3 do Bling (OAuth 2.0, authorization code).
@@ -369,4 +371,97 @@ export function errorResponse(err: unknown): Response {
   }
   const message = err instanceof Error ? err.message : "Erro ao falar com o Bling.";
   return Response.json({ error: message }, { status: 502 });
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo completo (montador de setup)
+// ---------------------------------------------------------------------------
+
+export type CatalogProduct = BlingProduct & { slot: ItemCategory };
+
+export type Catalog = {
+  products: CatalogProduct[];
+  fetchedAt: string;
+  /** Verdadeiro quando o catálogo passou do limite de páginas e foi cortado. */
+  truncated: boolean;
+  pages: number;
+};
+
+const CATALOG_TTL_MS = 5 * 60 * 1000;
+/** 100 por página × 40 páginas = 4000 produtos, o bastante para uma loja de informática. */
+const CATALOG_MAX_PAGES = 40;
+const CATALOG_PAGE_SIZE = 100;
+/** Bling: 3 req/s. 400ms entre páginas fica com folga. */
+const CATALOG_PAGE_DELAY_MS = 400;
+
+/** Cache por processo. Na Vercel dura enquanto a instância viver; local, 5 min. */
+let catalogCache: { key: string; catalog: Catalog; expiresAt: number } | null = null;
+let catalogInFlight: Promise<Catalog> | null = null;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchWholeCatalog(): Promise<Catalog> {
+  const products: CatalogProduct[] = [];
+  let page = 1;
+  let truncated = false;
+  for (;;) {
+    const params = new URLSearchParams();
+    params.set("pagina", String(page));
+    params.set("limite", String(CATALOG_PAGE_SIZE));
+    params.set("criterio", "2");
+    params.set("tipo", "P");
+    const data = await apiGet<{ data?: RawProduct[] }>("/produtos", params);
+    const batch = (data.data ?? []).filter((p) => p.id != null).map(mapProduct);
+    for (const p of batch) products.push({ ...p, slot: classifyProductName(p.name) });
+    if (batch.length < CATALOG_PAGE_SIZE) break;
+    if (page >= CATALOG_MAX_PAGES) {
+      truncated = true;
+      break;
+    }
+    page++;
+    await sleep(CATALOG_PAGE_DELAY_MS);
+  }
+
+  // Se a listagem não trouxe saldo, completa pelo endpoint de saldos em lotes.
+  const missing = products.filter((p) => p.stock == null).map((p) => p.id);
+  if (missing.length > 0 && missing.length === products.length) {
+    for (let i = 0; i < missing.length; i += 100) {
+      const chunk = missing.slice(i, i + 100);
+      const balances = await getStockBalances(chunk).catch(() => []);
+      const byId = new Map(balances.map((b) => [b.productId, b]));
+      for (const p of products) {
+        const b = byId.get(p.id);
+        if (b) {
+          p.stock = b.virtual;
+          p.stockPhysical = b.physical;
+        }
+      }
+      if (i + 100 < missing.length) await sleep(CATALOG_PAGE_DELAY_MS);
+    }
+  }
+
+  return { products, fetchedAt: new Date().toISOString(), truncated, pages: page };
+}
+
+/**
+ * Catálogo de produtos ativos, classificado por slot, com cache de 5 minutos.
+ * Chamadas simultâneas compartilham a mesma busca (evita estourar o rate limit).
+ */
+export async function getCatalog(refresh = false): Promise<Catalog> {
+  const { cfg } = await getClient();
+  const key = cfg.clientId;
+  const now = Date.now();
+  if (!refresh && catalogCache && catalogCache.key === key && catalogCache.expiresAt > now) {
+    return catalogCache.catalog;
+  }
+  if (catalogInFlight) return catalogInFlight;
+  catalogInFlight = fetchWholeCatalog()
+    .then((catalog) => {
+      catalogCache = { key, catalog, expiresAt: Date.now() + CATALOG_TTL_MS };
+      return catalog;
+    })
+    .finally(() => {
+      catalogInFlight = null;
+    });
+  return catalogInFlight;
 }
