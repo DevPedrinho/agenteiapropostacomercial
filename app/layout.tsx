@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: "Agente de Proposta Comercial",
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <SiteNav />
+        {children}
+      </body>
     </html>
   );
 }

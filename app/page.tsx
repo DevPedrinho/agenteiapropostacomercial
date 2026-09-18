@@ -1,4 +1,4 @@
-import ProposalWorkspace from "@/components/ProposalWorkspace";
+import ProposalWorkspace from "@/components/ProposalWorkspaceLoader";
 
 export default function Home() {
   return (

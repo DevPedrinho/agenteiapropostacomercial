@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { takeProposalHandoff } from "@/lib/quote-storage";
 import SpecEditor from "./SpecEditor";
 import ProposalOutput from "./ProposalOutput";
 import type { ProductSpecInput, ProposalContent, ProposalStyle } from "@/lib/types";
@@ -13,7 +14,14 @@ const DEFAULT_INPUT: ProductSpecInput = {
 };
 
 export default function ProposalWorkspace() {
-  const [input, setInput] = useState<ProductSpecInput>(DEFAULT_INPUT);
+  // Renderizado só no cliente (ver ProposalWorkspaceLoader): pode ler a lista de
+  // peças vinda do montador de orçamento (/orcamento → "Gerar ficha de produto").
+  const [input, setInput] = useState<ProductSpecInput>(() => {
+    const handoff = takeProposalHandoff();
+    return handoff
+      ? { ...DEFAULT_INPUT, productName: handoff.productName, rawSpecs: handoff.rawSpecs }
+      : DEFAULT_INPUT;
+  });
   const [content, setContent] = useState<ProposalContent | null>(null);
   const [style, setStyle] = useState<ProposalStyle>("comercial");
   const [loading, setLoading] = useState(false);
