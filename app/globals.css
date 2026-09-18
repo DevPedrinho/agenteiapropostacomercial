@@ -590,6 +590,19 @@ main.app {
   padding: 4px;
 }
 
+.menu-list a {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.menu-list a:hover {
+  background: var(--surface-2);
+}
+
 .menu-list button {
   display: block;
   width: 100%;

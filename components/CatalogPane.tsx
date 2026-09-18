@@ -116,6 +116,9 @@ export default function CatalogPane({
           {status?.configured && !connected && (
             <a className="btn primary sm" href="/api/bling/auth">Conectar</a>
           )}
+          {status && !status.configured && (
+            <a className="link-btn" href="/api/bling/diagnostico" target="_blank" rel="noopener noreferrer">diagnóstico</a>
+          )}
           {connected && (
             <div className="bling-tools">
               <button className="icon-btn" onClick={onReload} title="Recarregar estoque" disabled={loading}>↻</button>
@@ -123,6 +126,7 @@ export default function CatalogPane({
                 <summary className="icon-btn" title="Mais">⋯</summary>
                 <div className="menu-list">
                   <button onClick={onRefreshStock}>Atualizar estoque das peças escolhidas</button>
+                  <a href="/api/bling/diagnostico" target="_blank" rel="noopener noreferrer">Diagnóstico da integração</a>
                   <button onClick={onDisconnect}>Desconectar do Bling</button>
                 </div>
               </details>

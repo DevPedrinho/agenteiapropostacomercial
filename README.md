@@ -79,6 +79,10 @@ Com `BLING_CLIENT_ID` e `BLING_CLIENT_SECRET` configurados, aparece o painel **B
    (`GET /estoques/saldos`) e atualiza o selo verde/amarelo/vermelho de cada linha
    (verde: tem para a quantidade; amarelo: tem menos que a quantidade; vermelho: zerado).
 
+`GET /api/bling/diagnostico` mostra o estado da configuração, a URL de callback exata a
+cadastrar e, conectado, uma amostra bruta das três chamadas com os campos que vieram —
+use na primeira conexão real para conferir a integração.
+
 Para configurar, crie um aplicativo em <https://developer.bling.com.br> com escopo de
 leitura de **Produtos** e **Estoques** e a URL de redirecionamento
 `https://SEU-DOMINIO/api/bling/callback` (em desenvolvimento,
